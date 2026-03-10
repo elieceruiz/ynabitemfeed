@@ -56,7 +56,8 @@ if archivo:
                 ACCOUNT_ID,
                 s["categoria_id"],
                 s["producto"],
-                s["precio"]
+                s["precio"],
+                fecha
             )
 
             productos.update_one(
