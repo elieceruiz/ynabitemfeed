@@ -1,3 +1,5 @@
+# app.py
+
 import streamlit as st
 from parser_xml import leer_factura
 from ynab_api import traer_categorias, crear_transaccion
