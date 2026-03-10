@@ -41,11 +41,19 @@ st.title("Factura → YNAB")
 # BUSCAR FACTURAS EN GMAIL
 # ------------------------------------------
 
+dias = st.number_input(
+    "Buscar facturas de los últimos días",
+    min_value=1,
+    max_value=365,
+    value=120
+)
+
+
 if st.button("📬 Buscar facturas en Gmail"):
 
     service = conectar_gmail()
 
-    archivos = obtener_adjuntos(service)
+    archivos = obtener_adjuntos(service, dias)
 
     st.session_state["gmail_archivos"] = archivos
 
@@ -57,38 +65,58 @@ if "gmail_archivos" in st.session_state:
 
     if archivos:
 
-        nombres = [a["filename"] for a in archivos]
+        opciones = []
+        mapa_archivos = {}
 
-        seleccion_gmail = st.selectbox(
-            "Facturas encontradas en Gmail",
-            nombres
-        )
+        for a in archivos:
 
-        archivo_dict = next(
-            a for a in archivos if a["filename"] == seleccion_gmail
-        )
+            xml_bytes = extraer_xml(a)
 
-        xml_bytes = extraer_xml(archivo_dict)
+            if not xml_bytes:
+                continue
 
-        if xml_bytes:
-            archivo = io.BytesIO(xml_bytes)
+            items, fecha, proveedor = leer_factura(io.BytesIO(xml_bytes))
+
+            if not items:
+                continue
+
+            total = sum(i["precio"] for i in items)
+
+            # mejora visual agregando fecha
+            label = f"📄 {proveedor} — ${total:,.0f} — {fecha}"
+
+            opciones.append(label)
+            mapa_archivos[label] = a
+
+        if opciones:
+
+            seleccion_gmail = st.selectbox(
+                "Facturas encontradas en Gmail",
+                opciones
+            )
+
+            archivo_dict = mapa_archivos[seleccion_gmail]
+
+            xml_bytes = extraer_xml(archivo_dict)
+
+            if xml_bytes:
+                archivo = io.BytesIO(xml_bytes)
+            else:
+                archivo = None
 
         else:
+
+            st.info("No se encontraron facturas válidas en los adjuntos.")
             archivo = None
 
     else:
-        st.info("No se encontraron facturas en Gmail")
+
+        st.info("No se encontraron correos con adjuntos.")
         archivo = None
 
 else:
 
-    # ------------------------------------------
-    # SUBIDA DEL ARCHIVO XML
-    # ------------------------------------------
-
-    # Widget que permite subir la factura electrónica
     archivo = st.file_uploader("Sube factura XML")
-
 
 # ------------------------------------------
 # SOLO EJECUTAMOS EL RESTO SI HAY ARCHIVO
@@ -129,16 +157,10 @@ if archivo:
     # TRAER CATEGORÍAS DESDE YNAB
     # ------------------------------------------
 
-    # Consultamos la API de YNAB para traer todas las categorías
     categorias = traer_categorias()
 
-
-    # Convertimos la lista en un diccionario
-    # "nombre_categoria" → "id_categoria"
     mapa_cat = {c["nombre"]: c["id"] for c in categorias}
 
-
-    # Lista de nombres que usaremos en el dropdown
     nombres_cat = list(mapa_cat.keys())
 
 
@@ -150,7 +172,6 @@ if archivo:
 
 
     # Lista donde guardaremos las selecciones del usuario
-    # (producto, precio, categoría elegida)
     seleccion = []
 
 
@@ -158,12 +179,9 @@ if archivo:
     # RECORRER TODOS LOS PRODUCTOS DE LA FACTURA
     # ------------------------------------------
 
-    for i in items:
+    for idx, i in enumerate(items):
 
-        # Nombre del producto detectado en el XML
         producto = i["producto"]
-
-        # Precio del producto
         precio = i["precio"]
 
 
@@ -171,14 +189,11 @@ if archivo:
         # BUSCAR MEMORIA EN MONGO
         # ------------------------------------------
 
-        # Revisamos si este producto ya fue clasificado antes
         memoria = productos.find_one({"producto": producto})
 
         if memoria:
-            # Si existe, usamos esa categoría por defecto
             categoria_default = memoria["categoria"]
         else:
-            # Si no existe, usamos la primera categoría de la lista
             categoria_default = nombres_cat[0]
 
 
@@ -186,12 +201,8 @@ if archivo:
         # BLOQUE VISUAL DEL ITEM
         # ------------------------------------------
 
-        # Creamos un contenedor visual
         with st.container():
 
-            # Dividimos el layout en dos columnas
-            # izquierda = producto + categoría
-            # derecha = precio
             col1, col2 = st.columns([5,1])
 
 
@@ -201,20 +212,14 @@ if archivo:
 
             with col1:
 
-                # Mostrar nombre del producto
                 st.markdown(f"**{producto}**")
 
-                # Dropdown para seleccionar categoría
                 categoria = st.selectbox(
                     "Categoría",
                     nombres_cat,
-
-                    # Usamos la categoría recordada si existe
                     index=nombres_cat.index(categoria_default)
                     if categoria_default in nombres_cat else 0,
-
-                    # key evita conflictos entre dropdowns
-                    key=producto
+                    key=f"{producto}_{idx}"
                 )
 
 
@@ -224,11 +229,9 @@ if archivo:
 
             with col2:
 
-                # Mostrar precio del item
                 st.markdown(f"### ${precio:,.0f}")
 
 
-        # Línea divisoria visual entre productos
         st.divider()
 
 
@@ -250,36 +253,24 @@ if archivo:
 
     if st.button("🚀 Enviar factura a YNAB", use_container_width=True):
 
-        # Recorremos todos los items seleccionados
         for s in seleccion:
 
-            # Creamos una transacción en YNAB
             crear_transaccion(
                 ACCOUNT_ID,
                 s["categoria_id"],
-                proveedor,        # PAYEE (comercio)
+                proveedor,
                 s["precio"],
                 fecha,
-                s["producto"]     # MEMO (producto)
+                s["producto"]
             )
-
-
-            # ------------------------------------------
-            # GUARDAR MEMORIA EN MONGO
-            # ------------------------------------------
 
             productos.update_one(
                 {"producto": s["producto"]},
-
                 {"$set": {
                     "categoria": s["categoria"],
                     "categoria_id": s["categoria_id"]
                 }},
-
-                # Si no existe el producto, lo crea
                 upsert=True
             )
 
-
-        # Mensaje de confirmación
         st.success("Factura enviada a YNAB")

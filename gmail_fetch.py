@@ -69,7 +69,8 @@ def conectar_gmail():
 # BUSCAR CORREOS CON FACTURAS
 # ---------------------------------------
 
-def obtener_adjuntos(service):
+def obtener_adjuntos(service, dias):
+
     """
     Busca correos con adjuntos XML o ZIP
     y devuelve lista de archivos encontrados.
@@ -77,7 +78,7 @@ def obtener_adjuntos(service):
 
     results = service.users().messages().list(
         userId="me",
-        q="has:attachment newer_than:120d"
+        q=f"has:attachment (filename:xml OR filename:zip) newer_than:{dias}d"
     ).execute()
 
     mensajes = results.get("messages", [])
@@ -129,7 +130,6 @@ def obtener_adjuntos(service):
                 })
 
     return archivos
-
 
 # ---------------------------------------
 # EXTRAER XML SI EL ARCHIVO ES ZIP
