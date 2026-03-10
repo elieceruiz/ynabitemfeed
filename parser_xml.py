@@ -1,3 +1,5 @@
+# parser_xml.py
+
 import xml.etree.ElementTree as ET
 
 def leer_factura(xml_file):
@@ -9,12 +11,16 @@ def leer_factura(xml_file):
     descripcion_node = root.find(".//{*}Description")
 
     if descripcion_node is None or descripcion_node.text is None:
-        return []
+        return [], None
 
     descripcion = descripcion_node.text.strip()
 
     # parsear la factura real
     invoice_root = ET.fromstring(descripcion)
+
+    # obtener fecha de la factura
+    fecha_node = invoice_root.find(".//{*}IssueDate")
+    fecha = fecha_node.text if fecha_node is not None else None
 
     items = []
 
@@ -30,4 +36,4 @@ def leer_factura(xml_file):
             "cantidad": float(cantidad.text) if cantidad is not None else 1
         })
 
-    return items
+    return items, fecha
