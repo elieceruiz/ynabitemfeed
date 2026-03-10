@@ -11,7 +11,7 @@ def leer_factura(xml_file):
     descripcion_node = root.find(".//{*}Description")
 
     if descripcion_node is None or descripcion_node.text is None:
-        return [], None
+        return [], None, None
 
     descripcion = descripcion_node.text.strip()
 
@@ -21,6 +21,10 @@ def leer_factura(xml_file):
     # obtener fecha de la factura
     fecha_node = invoice_root.find(".//{*}IssueDate")
     fecha = fecha_node.text if fecha_node is not None else None
+
+    # obtener proveedor (payee)
+    supplier_node = invoice_root.find(".//{*}AccountingSupplierParty//{*}Name")
+    proveedor = supplier_node.text.strip() if supplier_node is not None else "Proveedor desconocido"
 
     items = []
 
@@ -36,4 +40,4 @@ def leer_factura(xml_file):
             "cantidad": float(cantidad.text) if cantidad is not None else 1
         })
 
-    return items, fecha
+    return items, fecha, proveedor
