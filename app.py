@@ -1,9 +1,12 @@
+# app.py
+
 # ------------------------------------------
 # IMPORTACIONES
 # ------------------------------------------
 
 # Streamlit es el framework que usamos para la interfaz web
 import streamlit as st
+import io
 
 # Función que lee el XML de la factura electrónica
 # y devuelve: items (productos), fecha y proveedor
@@ -14,6 +17,9 @@ from ynab_api import traer_categorias, crear_transaccion
 
 # Colección Mongo donde guardamos memoria de productos → categoría
 from db import productos
+
+# NUEVO: Gmail
+from gmail_fetch import conectar_gmail, obtener_adjuntos, extraer_xml
 
 
 # ------------------------------------------
@@ -32,11 +38,56 @@ st.title("Factura → YNAB")
 
 
 # ------------------------------------------
-# SUBIDA DEL ARCHIVO XML
+# BUSCAR FACTURAS EN GMAIL
 # ------------------------------------------
 
-# Widget que permite subir la factura electrónica
-archivo = st.file_uploader("Sube factura XML")
+if st.button("📬 Buscar facturas en Gmail"):
+
+    service = conectar_gmail()
+
+    archivos = obtener_adjuntos(service)
+
+    st.session_state["gmail_archivos"] = archivos
+
+
+# Mostrar resultados Gmail si existen
+if "gmail_archivos" in st.session_state:
+
+    archivos = st.session_state["gmail_archivos"]
+
+    if archivos:
+
+        nombres = [a["filename"] for a in archivos]
+
+        seleccion_gmail = st.selectbox(
+            "Facturas encontradas en Gmail",
+            nombres
+        )
+
+        archivo_dict = next(
+            a for a in archivos if a["filename"] == seleccion_gmail
+        )
+
+        xml_bytes = extraer_xml(archivo_dict)
+
+        if xml_bytes:
+            archivo = io.BytesIO(xml_bytes)
+
+        else:
+            archivo = None
+
+    else:
+        st.info("No se encontraron facturas en Gmail")
+        archivo = None
+
+else:
+
+    # ------------------------------------------
+    # SUBIDA DEL ARCHIVO XML
+    # ------------------------------------------
+
+    # Widget que permite subir la factura electrónica
+    archivo = st.file_uploader("Sube factura XML")
 
 
 # ------------------------------------------
