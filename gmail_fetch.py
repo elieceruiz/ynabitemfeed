@@ -77,7 +77,7 @@ def obtener_adjuntos(service):
 
     results = service.users().messages().list(
         userId="me",
-        q="has:attachment filename:(xml OR zip) subject:(factura OR invoice) newer_than:30d"
+        q="has:attachment newer_than:30d"
     ).execute()
 
     mensajes = results.get("messages", [])
