@@ -13,8 +13,25 @@ def leer_factura(xml_file):
     if descripcion_node is None or descripcion_node.text is None:
         return [], None, None
 
-    descripcion = descripcion_node.text.strip()
+    descripcion = descripcion_node.text
+    
+    if descripcion:
+        
+        # quitar espacios basura
+        descripcion = descripcion.strip()
+    
+        # buscar inicio real del XML
+        inicio = descripcion.find("<?xml")
+    
+        if inicio != -1:
+            descripcion = descripcion[inicio:]
+        else:
+            # si no aparece <?xml, buscar <Invoice directamente
+            inicio = descripcion.find("<Invoice")
 
+            if inicio != -1:
+                descripcion = descripcion[inicio:]
+    
     # parsear la factura real
     try:
         invoice_root = ET.fromstring(descripcion)
@@ -22,7 +39,7 @@ def leer_factura(xml_file):
         # no es una factura válida
         return [], None, None
     
-    # verificar que sea factura DIAN
+    # verificar que realmente tenga líneas de factura, que sea factura DIAN
     if invoice_root.find(".//{*}InvoiceLine") is None:
         return [], None, None
 
