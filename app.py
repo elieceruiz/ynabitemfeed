@@ -17,6 +17,8 @@ if archivo:
 
     st.write("Fecha factura:", fecha)
     st.write("Proveedor:", proveedor)
+    total = sum(i["precio"] for i in items)
+    st.metric("Total factura", f"${total:,.0f}")
 
     categorias = traer_categorias()
 
@@ -39,20 +41,30 @@ if archivo:
         else:
             categoria_default = nombres_cat[0]
 
-        col1, col2 = st.columns([4,1])
 
-        with col1:
+        
+        with st.container():
+        
+            col1, col2 = st.columns([5,1])
+        
+            with col1:
+        
+                st.markdown(f"**{producto}**")
+        
+                categoria = st.selectbox(
+                    "Categoría",
+                    nombres_cat,
+                    index=nombres_cat.index(categoria_default)
+                    if categoria_default in nombres_cat else 0,
+                    key=producto
+                )
+        
+            with col2:
+                st.markdown(f"### ${precio:,.0f}")
+        
+        st.divider()        
 
-            categoria = st.selectbox(
-                f"{producto}",
-                nombres_cat,
-                index=nombres_cat.index(categoria_default)
-                if categoria_default in nombres_cat else 0
-            )
-
-        with col2:
-            st.write(f"${precio:,.0f}")
-
+        
         seleccion.append({
             "producto": producto,
             "precio": precio,
