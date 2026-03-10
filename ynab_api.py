@@ -36,7 +36,7 @@ def crear_transaccion(account_id, categoria_id, payee, amount):
     payload = {
         "transaction": {
             "account_id": account_id,
-            "date": str(date.today()),
+            "date": str("date": fecha),
             "amount": -int(amount * 1000),
             "payee_name": payee,
             "category_id": categoria_id
