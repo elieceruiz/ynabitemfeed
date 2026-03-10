@@ -53,7 +53,7 @@ def conectar_gmail():
                 SCOPES
             )
 
-            creds = flow.run_console()
+            creds = flow.run_local_server(port=0, open_browser=False)
 
         # Guardar token para futuras ejecuciones
         with open("token.json", "wb") as token:
