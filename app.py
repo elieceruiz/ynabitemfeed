@@ -9,7 +9,7 @@ import streamlit as st
 import io
 
 # Función que lee el XML de la factura electrónica
-# y devuelve: items (productos), fecha y proveedor
+# y devuelve: items (productos), fecha, proveedor y total_factura
 from parser_xml import leer_factura
 
 # Funciones para interactuar con la API de YNAB
@@ -58,7 +58,10 @@ if st.button("📬 Buscar facturas en Gmail"):
     st.session_state["gmail_archivos"] = archivos
 
 
-# Mostrar resultados Gmail si existen
+# ------------------------------------------
+# MOSTRAR RESULTADOS DE GMAIL
+# ------------------------------------------
+
 if "gmail_archivos" in st.session_state:
 
     archivos = st.session_state["gmail_archivos"]
@@ -75,14 +78,17 @@ if "gmail_archivos" in st.session_state:
             if not xml_bytes:
                 continue
 
-            items, fecha, proveedor = leer_factura(io.BytesIO(xml_bytes))
+            items, fecha, proveedor, total_factura = leer_factura(io.BytesIO(xml_bytes))
 
             if not items:
                 continue
 
-            total = sum(i["precio"] for i in items)
+            # usar total real si existe
+            if total_factura:
+                total = total_factura
+            else:
+                total = sum(i["precio"] for i in items)
 
-            # mejora visual agregando fecha
             label = f"📄 {proveedor} — ${total:,.0f} — {fecha}"
 
             opciones.append(label)
@@ -118,6 +124,7 @@ else:
 
     archivo = st.file_uploader("Sube factura XML")
 
+
 # ------------------------------------------
 # SOLO EJECUTAMOS EL RESTO SI HAY ARCHIVO
 # ------------------------------------------
@@ -125,20 +132,14 @@ else:
 if archivo:
 
     # Leemos el XML y extraemos información estructurada
-    # items = lista de productos
-    # fecha = fecha de la factura
-    # proveedor = comercio que emitió la factura
-    items, fecha, proveedor = leer_factura(archivo)
+    items, fecha, proveedor, total_factura = leer_factura(archivo)
 
 
     # ------------------------------------------
     # INFORMACIÓN GENERAL DE LA FACTURA
     # ------------------------------------------
 
-    # Mostrar fecha de la factura
     st.write("Fecha factura:", fecha)
-
-    # Mostrar proveedor / comercio
     st.write("Proveedor:", proveedor)
 
 
@@ -146,10 +147,11 @@ if archivo:
     # TOTAL DE LA FACTURA
     # ------------------------------------------
 
-    # Sumamos el precio de todos los items detectados
-    total = sum(i["precio"] for i in items)
+    if total_factura:
+        total = total_factura
+    else:
+        total = sum(i["precio"] for i in items)
 
-    # Mostramos el total como métrica visual
     st.metric("Total factura", f"${total:,.0f}")
 
 
