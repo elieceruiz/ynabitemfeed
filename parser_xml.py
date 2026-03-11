@@ -111,7 +111,7 @@ def leer_factura(xml_file):
     for line in invoice_root.findall(".//{*}InvoiceLine"):
 
         producto = line.find(".//{*}Description")
-        precio = line.find(".//{*}PriceAmount")
+        precio = line.find(".//{*}LineExtensionAmount")
         cantidad = line.find(".//{*}InvoicedQuantity")
 
         nombre_producto = "UNKNOWN"
