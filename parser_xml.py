@@ -83,7 +83,7 @@ def leer_factura(xml_file):
 
         precio_valor = 0
 
-        # 1️⃣ POS supermercados (D1, Ara, etc.)
+        # 1️⃣ POS supermercados (D1, Ara)
         precio_node = line.find(".//{*}Note[@languageLocaleID='linea1']")
 
         if precio_node is not None and precio_node.text:
@@ -98,10 +98,20 @@ def leer_factura(xml_file):
             subtotal_node = line.find(".//{*}LineExtensionAmount")
 
             if subtotal_node is not None and subtotal_node.text:
+
                 try:
                     precio_valor = float(subtotal_node.text)
                 except:
                     precio_valor = 0
+
+                # sumar IVA si existe
+                tax_node = line.find(".//{*}TaxAmount")
+
+                if tax_node is not None and tax_node.text:
+                    try:
+                        precio_valor += float(tax_node.text)
+                    except:
+                        pass
 
             else:
 
