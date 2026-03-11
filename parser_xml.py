@@ -111,8 +111,8 @@ def leer_factura(xml_file):
 
         precio_valor = 0
 
-        # 1️⃣ Precio POS (supermercados)
-        precio_node = line.find(".//{*}Note[@languageLocaleID='linea1']")
+        # 1️⃣ Precio final (la mayoría de facturas modernas)
+        precio_node = line.find(".//{*}PriceAmount")
 
         if precio_node is not None and precio_node.text:
             try:
@@ -122,7 +122,7 @@ def leer_factura(xml_file):
 
         else:
 
-            # 2️⃣ Precio sin impuestos
+            # 2️⃣ Precio subtotal sin IVA
             precio_node = line.find(".//{*}LineExtensionAmount")
 
             if precio_node is not None and precio_node.text:
@@ -133,8 +133,8 @@ def leer_factura(xml_file):
 
             else:
 
-                # 3️⃣ Precio unitario
-                precio_node = line.find(".//{*}PriceAmount")
+                # 3️⃣ Precio POS (algunos supermercados)
+                precio_node = line.find(".//{*}Note[@languageLocaleID='linea1']")
 
                 if precio_node is not None and precio_node.text:
                     try:
