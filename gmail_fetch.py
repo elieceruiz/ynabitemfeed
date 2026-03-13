@@ -72,13 +72,14 @@ def conectar_gmail():
 def obtener_adjuntos(service, dias):
 
     """
-    Busca correos con adjuntos XML o ZIP
-    y devuelve lista de archivos encontrados.
+    Busca correos con adjuntos y devuelve
+    los archivos XML o ZIP encontrados.
     """
 
+    # ⚠️ Cambio clave: buscar cualquier adjunto
     results = service.users().messages().list(
         userId="me",
-        q=f"has:attachment (filename:xml OR filename:zip) newer_than:{dias}d"
+        q=f"has:attachment newer_than:{dias}d"
     ).execute()
 
     mensajes = results.get("messages", [])
@@ -102,34 +103,39 @@ def obtener_adjuntos(service, dias):
             if not filename:
                 continue
 
-            if filename.endswith(".xml") or filename.endswith(".zip"):
+            filename = filename.lower()
 
-                body = part.get("body", {})
+            # Filtrar solo XML o ZIP
+            if not (filename.endswith(".xml") or filename.endswith(".zip")):
+                continue
 
-                if "data" in body:
+            body = part.get("body", {})
 
-                    data = body["data"]
+            if "data" in body:
 
-                else:
+                data = body["data"]
 
-                    att_id = body.get("attachmentId")
+            else:
 
-                    att = service.users().messages().attachments().get(
-                        userId="me",
-                        messageId=m["id"],
-                        id=att_id
-                    ).execute()
+                att_id = body.get("attachmentId")
 
-                    data = att["data"]
+                att = service.users().messages().attachments().get(
+                    userId="me",
+                    messageId=m["id"],
+                    id=att_id
+                ).execute()
 
-                file_bytes = base64.urlsafe_b64decode(data)
+                data = att["data"]
 
-                archivos.append({
-                    "filename": filename,
-                    "data": file_bytes
-                })
+            file_bytes = base64.urlsafe_b64decode(data)
+
+            archivos.append({
+                "filename": filename,
+                "data": file_bytes
+            })
 
     return archivos
+
 
 # ---------------------------------------
 # EXTRAER XML SI EL ARCHIVO ES ZIP
@@ -139,24 +145,35 @@ def extraer_xml(archivo):
 
     """
     Recibe un archivo (xml o zip)
-    y devuelve el XML listo para parsear
+    y devuelve el XML listo para parsear.
     """
 
     filename = archivo["filename"]
     data = archivo["data"]
 
-    # Si ya es XML
+    # -----------------------------------
+    # SI YA ES XML
+    # -----------------------------------
+
     if filename.endswith(".xml"):
         return data
 
-    # Si es ZIP buscar XML dentro
+    # -----------------------------------
+    # SI ES ZIP → BUSCAR XML DENTRO
+    # -----------------------------------
+
     if filename.endswith(".zip"):
 
-        with zipfile.ZipFile(io.BytesIO(data)) as z:
+        try:
 
-            for name in z.namelist():
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
 
-                if name.endswith(".xml"):
-                    return z.read(name)
+                for name in z.namelist():
+
+                    if name.lower().endswith(".xml"):
+                        return z.read(name)
+
+        except zipfile.BadZipFile:
+            return None
 
     return None
