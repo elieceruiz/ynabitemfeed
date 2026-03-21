@@ -4,15 +4,12 @@
 # IMPORTS
 # ---------------------------------------
 
+import streamlit as st
 from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-import os
-import pickle
+from google.oauth2.credentials import Credentials
 import base64
 import zipfile
 import io
-
 
 # ---------------------------------------
 # PERMISOS GMAIL
@@ -20,37 +17,20 @@ import io
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
-
 # ---------------------------------------
-# CONECTAR CON GMAIL
+# CONECTAR CON GMAIL (USANDO SECRETS)
 # ---------------------------------------
 
 def conectar_gmail():
-    """
-    Abre conexión con Gmail usando OAuth2.
-    """
 
-    creds = None
-
-    if os.path.exists("token.json"):
-        with open("token.json", "rb") as token:
-            creds = pickle.load(token)
-
-    if not creds or not creds.valid:
-
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                "credentials.json",
-                SCOPES
-            )
-
-            creds = flow.run_local_server(port=0, open_browser=False)
-
-        with open("token.json", "wb") as token:
-            pickle.dump(creds, token)
+    creds = Credentials(
+        None,
+        refresh_token=st.secrets["GOOGLE_REFRESH_TOKEN"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=st.secrets["GOOGLE_CLIENT_ID"],
+        client_secret=st.secrets["GOOGLE_CLIENT_SECRET"],
+        scopes=SCOPES
+    )
 
     service = build("gmail", "v1", credentials=creds)
 
@@ -101,7 +81,7 @@ def _recorrer_partes(parts, msg_id, service, archivos):
                     "data": file_bytes
                 })
 
-        # 👇 CLAVE: buscar adjuntos en niveles internos (correos reenviados)
+        # Buscar dentro de partes internas (correos reenviados)
         if "parts" in part:
             _recorrer_partes(part["parts"], msg_id, service, archivos)
 
@@ -111,11 +91,6 @@ def _recorrer_partes(parts, msg_id, service, archivos):
 # ---------------------------------------
 
 def obtener_adjuntos(service, dias):
-
-    """
-    Busca correos con adjuntos y devuelve
-    archivos XML o ZIP encontrados.
-    """
 
     results = service.users().messages().list(
         userId="me",
@@ -147,11 +122,6 @@ def obtener_adjuntos(service, dias):
 
 def extraer_xml(archivo):
 
-    """
-    Recibe un archivo (xml o zip)
-    y devuelve el XML listo para parsear.
-    """
-
     filename = archivo["filename"]
     data = archivo["data"]
 
@@ -161,7 +131,6 @@ def extraer_xml(archivo):
     if filename.endswith(".zip"):
 
         try:
-
             with zipfile.ZipFile(io.BytesIO(data)) as z:
 
                 for name in z.namelist():
