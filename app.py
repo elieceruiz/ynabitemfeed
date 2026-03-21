@@ -45,7 +45,7 @@ dias = st.number_input(
     "Buscar facturas de los últimos días",
     min_value=1,
     max_value=365,
-    value=120
+    value=10
 )
 
 
