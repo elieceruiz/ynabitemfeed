@@ -1,2 +1,9 @@
-# credentials.json
-# token.json
+# Scripts locales
+ver_presupuestos.py
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
