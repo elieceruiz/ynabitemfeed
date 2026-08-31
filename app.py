@@ -196,8 +196,8 @@ st.title("Factura → YNAB")
 if YNAB_OK:
 
     st.info(
-        f"📒 **Plan:** {PLAN_NOMBRE}\n"
-        f"💳 **Cuenta:** {CUENTA_NOMBRE}"
+        f"**Plan:** {PLAN_NOMBRE} | "
+        f"**Cuenta:** {CUENTA_NOMBRE}"
     )
 
 
@@ -648,8 +648,8 @@ if archivo:
         # ----------------------------------------------------
 
         st.info(
-            f"📒 **Plan:** {plan_nombre_actual}\n"
-            f"💳 **Cuenta:** {cuenta_nombre_actual}"
+            f"**Plan:** {plan_nombre_actual} | "
+            f"**Cuenta:** {cuenta_nombre_actual}"
         )
 
 
