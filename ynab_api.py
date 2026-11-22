@@ -11,12 +11,11 @@ import streamlit as st
 
 BASE_URL = "https://api.ynab.com/v1"
 NOMBRE_FRESH_START = "fresh start"
-TOKEN = st.secrets["YNAB_TOKEN"]
 ACCOUNT_NAME = str(st.secrets.get("ACCOUNT_NAME", "") or "").strip()
 
 
 def ynab_headers():
-    return {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}
+    return {"Authorization": f"Bearer {st.secrets['YNAB_TOKEN']}", "Content-Type": "application/json"}
 
 
 def _get(path, params=None):
@@ -122,6 +121,8 @@ def _a_milliunits(amount):
         value = Decimal(str(amount)) * Decimal("1000")
     except (InvalidOperation, TypeError, ValueError) as exc:
         raise ValueError(f"Importe no válido: {amount!r}") from exc
+    if value <= 0:
+        raise ValueError("El importe de cada producto debe ser mayor que cero.")
     if value != value.to_integral_value():
         raise ValueError(f"El importe {amount!r} tiene más de tres decimales.")
     return -int(value)
