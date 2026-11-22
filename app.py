@@ -10,6 +10,7 @@ from parser_xml import leer_factura
 from ynab_api import obtener_contexto_ynab, traer_categorias, crear_transacciones
 
 
+# Configuración global de Streamlit: se mantiene centrada y sin barra lateral.
 st.set_page_config(
     page_title="Factura → YNAB",
     page_icon="🧾",
@@ -20,7 +21,12 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Misma limpieza visual ya validada en Faro 80 / Slave. */
+    /*
+     * 1. CONTROLES PROPIOS DE STREAMLIT
+     * Se ocultan los elementos de navegación y administración que rodean
+     * la aplicación. Esta técnica replica la solución que ya utilizábamos
+     * en Faro 80 / Slave. No se oculta el contenido funcional de la app.
+     */
     [data-testid="stSidebar"],
     [data-testid="collapsedControl"],
     [data-testid="stHeader"],
@@ -32,44 +38,208 @@ st.markdown(
         display: none !important;
     }
 
-    :root { --ink:#17231f; --muted:#748079; --line:#e7ece8; --soft:#f5f8f5; --green:#176b4b; --green-dark:#11543b; }
-    .stApp { background:#fbfcfb; }
-    [data-testid="stHeader"] { background:rgba(251,252,251,.92); }
-    .block-container { max-width:760px; padding-top:2.1rem; padding-bottom:4rem; }
-    h1,h2,h3,p,label { color:var(--ink); }
-    h1 { letter-spacing:-.045em; font-weight:720; }
-    h2,h3 { letter-spacing:-.025em; }
-    [data-testid="stCaptionContainer"] p { color:var(--muted); }
-    [data-testid="stMetric"] { background:var(--soft); border:1px solid var(--line); padding:1rem 1.1rem; border-radius:16px; }
-    [data-testid="stMetricLabel"] p { color:var(--muted); }
-    [data-testid="stMetricValue"] { color:var(--ink); letter-spacing:-.04em; }
-    [data-testid="stVerticalBlockBorderWrapper"] { border-color:var(--line); border-radius:18px; background:#fff; }
-    [data-testid="stFileUploader"] section { border:1px dashed #b9c9bf; border-radius:16px; background:#f8fbf8; }
-    [data-testid="stFileUploader"] section small { color:var(--muted); }
-    .stButton > button { border-radius:12px; min-height:2.8rem; font-weight:600; border-color:#dce5df; }
-    .stButton > button[kind="primary"] { background:var(--green); border-color:var(--green); color:white; }
-    .stButton > button[kind="primary"]:hover { background:var(--green-dark); border-color:var(--green-dark); }
-    [data-baseweb="select"] > div,[data-testid="stNumberInput"] input { border-radius:12px; border-color:#dce5df; min-height:2.8rem; }
-    [data-testid="stTabs"] [role="tab"] { font-weight:600; padding-top:.8rem; padding-bottom:.8rem; }
-    [data-testid="stAlert"] { border-radius:14px; }
-    .app-eyebrow,.step-label,.budget-label { color:var(--green); font-size:.72rem; font-weight:750; letter-spacing:.12em; text-transform:uppercase; margin-bottom:.35rem; }
-    .app-subtitle { color:var(--muted); font-size:1rem; margin-top:-.35rem; }
-    .budget-label { color:var(--muted); letter-spacing:.09em; }
-    .budget-name { font-size:1.05rem; font-weight:650; color:var(--ink); }
-    .product-name { font-weight:650; color:var(--ink); overflow-wrap:anywhere; }
-    .product-price { font-weight:650; color:var(--ink); text-align:right; }
-    div[data-testid="stExpander"] { border:1px solid var(--line); border-radius:14px; }
-    @media (max-width:640px) {
-      .block-container { padding:1.15rem 1rem 3rem; }
-      h1 { font-size:2rem; }
-      [data-testid="stMetric"] { padding:.8rem; }
-      .stButton > button { width:100%; }
+    /*
+     * 2. PALETA Y SUPERFICIE GENERAL
+     * Las variables centralizan los colores para que futuros ajustes
+     * visuales no obliguen a buscar y reemplazar valores repetidos.
+     */
+    :root {
+        --ink: #17231f;
+        --muted: #748079;
+        --line: #e7ece8;
+        --soft: #f5f8f5;
+        --green: #176b4b;
+        --green-dark: #11543b;
+    }
+
+    .stApp {
+        background: #fbfcfb;
+    }
+
+    /*
+     * 3. CONTENEDOR PRINCIPAL
+     * En escritorio conserva un ancho de lectura cómodo.
+     * El espacio superior móvil se define más abajo por separado para
+     * evitar que el título quede debajo de la barra de estado del teléfono.
+     */
+    .block-container {
+        max-width: 760px;
+        padding-top: 2.1rem;
+        padding-bottom: 4rem;
+    }
+
+    h1, h2, h3, p, label {
+        color: var(--ink);
+    }
+
+    h1 {
+        letter-spacing: -.045em;
+        font-weight: 720;
+    }
+
+    h2, h3 {
+        letter-spacing: -.025em;
+    }
+
+    [data-testid="stCaptionContainer"] p {
+        color: var(--muted);
+    }
+
+    /*
+     * 4. TARJETAS, MÉTRICAS Y CONTROLES
+     * Se mantienen superficies blancas, bordes suaves y radios consistentes.
+     * No se cambian los widgets ni su comportamiento; solo su presentación.
+     */
+    [data-testid="stMetric"] {
+        background: var(--soft);
+        border: 1px solid var(--line);
+        padding: 1rem 1.1rem;
+        border-radius: 16px;
+    }
+
+    [data-testid="stMetricLabel"] p {
+        color: var(--muted);
+    }
+
+    [data-testid="stMetricValue"] {
+        color: var(--ink);
+        letter-spacing: -.04em;
+    }
+
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        border-color: var(--line);
+        border-radius: 18px;
+        background: #fff;
+    }
+
+    [data-testid="stFileUploader"] section {
+        border: 1px dashed #b9c9bf;
+        border-radius: 16px;
+        background: #f8fbf8;
+    }
+
+    [data-testid="stFileUploader"] section small {
+        color: var(--muted);
+    }
+
+    .stButton > button {
+        border-radius: 12px;
+        min-height: 2.8rem;
+        font-weight: 600;
+        border-color: #dce5df;
+    }
+
+    .stButton > button[kind="primary"] {
+        background: var(--green);
+        border-color: var(--green);
+        color: white;
+    }
+
+    .stButton > button[kind="primary"]:hover {
+        background: var(--green-dark);
+        border-color: var(--green-dark);
+    }
+
+    [data-baseweb="select"] > div,
+    [data-testid="stNumberInput"] input {
+        border-radius: 12px;
+        border-color: #dce5df;
+        min-height: 2.8rem;
+    }
+
+    [data-testid="stTabs"] [role="tab"] {
+        font-weight: 600;
+        padding-top: .8rem;
+        padding-bottom: .8rem;
+    }
+
+    [data-testid="stAlert"] {
+        border-radius: 14px;
+    }
+
+    /*
+     * 5. TIPOGRAFÍA Y ETIQUETAS DE SECCIÓN
+     * Estas clases se aplican a los pequeños rótulos y a los datos de factura.
+     */
+    .app-eyebrow,
+    .step-label,
+    .budget-label {
+        color: var(--green);
+        font-size: .72rem;
+        font-weight: 750;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        margin-bottom: .35rem;
+    }
+
+    .app-subtitle {
+        color: var(--muted);
+        font-size: 1rem;
+        margin-top: -.35rem;
+    }
+
+    .budget-label {
+        color: var(--muted);
+        letter-spacing: .09em;
+    }
+
+    .budget-name {
+        font-size: 1.05rem;
+        font-weight: 650;
+        color: var(--ink);
+    }
+
+    .product-name {
+        font-weight: 650;
+        color: var(--ink);
+        overflow-wrap: anywhere;
+    }
+
+    .product-price {
+        font-weight: 650;
+        color: var(--ink);
+        text-align: right;
+    }
+
+    div[data-testid="stExpander"] {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+    }
+
+    /*
+     * 6. AJUSTES PARA TELÉFONOS
+     * IMPORTANTE: al ocultar stHeader también desaparece el espacio que
+     * Streamlit normalmente reserva arriba. En móviles, la barra de estado
+     * del sistema puede superponerse al inicio de la página.
+     *
+     * Por eso se reserva un margen superior de 4.25rem (68px): el contenido
+     * comienza debajo de la hora, señal, Wi-Fi y demás indicadores del móvil.
+     * Este ajuste solo afecta pantallas de hasta 640px; escritorio conserva
+     * su espaciado original.
+     */
+    @media (max-width: 640px) {
+        .block-container {
+            padding: 4.25rem 1rem 3rem;
+        }
+
+        h1 {
+            font-size: 2rem;
+        }
+
+        [data-testid="stMetric"] {
+            padding: .8rem;
+        }
+
+        .stButton > button {
+            width: 100%;
+        }
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+# CABECERA: identidad y descripción breve de la herramienta.
 st.markdown('<div class="app-eyebrow">Control de gastos · Importación</div>', unsafe_allow_html=True)
 st.title("Factura → YNAB")
 st.markdown(
@@ -77,6 +247,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# CONEXIÓN YNAB: recupera el presupuesto, sus cuentas y la cuenta sugerida.
+# La selección se valida contra las cuentas activas devueltas por la API.
 try:
     contexto = obtener_contexto_ynab()
     budget_id = contexto["budget_id"]
@@ -97,6 +269,8 @@ with st.container(border=True):
     st.markdown(f'<div class="budget-name">{html.escape(str(budget_name))}</div>', unsafe_allow_html=True)
     st.caption("Conexión activa con YNAB")
 
+# PASO 1 — CUENTA: el usuario elige dónde registrar los gastos.
+# Se conserva el ID real de la cuenta; el nombre solo se usa para mostrarla.
 st.markdown('<div class="step-label">01 · Cuenta de destino</div>', unsafe_allow_html=True)
 selected_id = st.selectbox(
     "¿En qué cuenta registrar los gastos?",
@@ -115,6 +289,8 @@ if selected_id:
 else:
     st.caption("Selecciona una cuenta activa para continuar.")
 
+# PASO 2 — ORIGEN: permite trabajar desde un XML local o desde Gmail.
+# Los dos caminos producen el mismo objeto `invoice` para reutilizar el flujo.
 st.markdown('<div class="step-label">02 · Añadir factura</div>', unsafe_allow_html=True)
 source = st.radio(
     "Origen de la factura",
@@ -193,6 +369,8 @@ else:
 if invoice and not invoice.get("items"):
     st.warning("El archivo se abrió, pero no contiene líneas de productos válidas.")
 
+# PASO 3 — REVISIÓN: a partir de aquí ambos orígenes comparten el proceso.
+# Se revisan los datos de cabecera, se clasifican productos y se confirma el envío.
 if invoice and invoice.get("items"):
     items = invoice["items"]
     fecha = invoice["date"]
@@ -263,6 +441,8 @@ if invoice and invoice.get("items"):
         )
         st.caption("Comprueba los productos, importes y categorías antes de enviar.")
 
+    # ENVÍO: una única acción explícita del usuario crea las transacciones.
+    # La memoria de categorías se actualiza después de la confirmación de YNAB.
     if st.button("Enviar factura a YNAB", type="primary", use_container_width=True, disabled=not selections):
         if not fecha:
             st.error("La factura no contiene una fecha válida; no se enviará.")
