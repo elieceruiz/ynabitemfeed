@@ -1,717 +1,196 @@
-# ============================================================
-# app.py
-# ============================================================
-#
-# Aplicación:
-#
-#     Factura → YNAB
-#
-# Flujo:
-#
-# 1. Buscar facturas en Gmail.
-# 2. Extraer el XML.
-# 3. Leer productos, fecha, proveedor y total.
-# 4. Obtener las categorías ACTUALES de YNAB.
-# 5. Permitir asignar categorías.
-# 6. Guardar memoria producto → categoría en MongoDB.
-# 7. Crear las transacciones en YNAB.
-#
-# ============================================================
-
-
-# ------------------------------------------
-# IMPORTACIONES
-# ------------------------------------------
-
-# Streamlit es el framework que usamos para
-# construir la interfaz web.
-import streamlit as st
-
-# io permite trabajar con los bytes del XML
-# como si fueran un archivo.
+"""Factura → YNAB: importa XML de facturas y clasifica sus productos."""
 import io
-
-
-# ------------------------------------------
-# LECTOR DE FACTURAS
-# ------------------------------------------
-
-# Función que lee el XML de la factura electrónica
-# y devuelve:
-#
-# items
-# fecha
-# proveedor
-# total_factura
-from parser_xml import leer_factura
-
-
-# ------------------------------------------
-# API DE YNAB
-# ------------------------------------------
-
-# traer_categorias:
-#     Obtiene las categorías del Plan actual.
-#
-# crear_transaccion:
-#     Crea una transacción en YNAB.
-#
-# obtener_contexto_ynab:
-#     >>> CORRECCIÓN
-#     Detecta automáticamente:
-#
-#         - Plan actual
-#         - BUDGET_ID actual
-#         - Cuenta actual
-#         - ACCOUNT_ID actual
-#
-#     Esto evita depender del ACCOUNT_ID viejo
-#     guardado manualmente en Secrets.
-from ynab_api import (
-    traer_categorias,
-    crear_transaccion,
-    obtener_contexto_ynab
-)
-
-
-# ------------------------------------------
-# MONGO
-# ------------------------------------------
-
-# Colección Mongo donde guardamos memoria:
-#
-# producto → categoría
+import streamlit as st
 from db import productos
+from gmail_fetch import conectar_gmail, obtener_adjuntos, extraer_xml
+from parser_xml import leer_factura
+from ynab_api import obtener_contexto_ynab, traer_categorias, crear_transacciones
 
-
-# ------------------------------------------
-# GMAIL
-# ------------------------------------------
-
-# Funciones utilizadas para:
-#
-# 1. Conectarnos a Gmail.
-# 2. Obtener adjuntos.
-# 3. Extraer XML.
-from gmail_fetch import (
-    conectar_gmail,
-    obtener_adjuntos,
-    extraer_xml
-)
-
-
-# ============================================================
-# CONFIGURACIÓN YNAB
-# ============================================================
-
-# >>> CORRECCIÓN PRINCIPAL
-#
-# ANTES:
-#
-# ACCOUNT_ID = st.secrets["ACCOUNT_ID"]
-#
-# Eso significaba que la aplicación utilizaba SIEMPRE
-# el ACCOUNT_ID guardado en Secrets.
-#
-# Después de un Fresh Start ese ID puede cambiar.
-#
-# AHORA:
-#
-# La aplicación consulta YNAB y obtiene:
-#
-#     Plan actual
-#     Cuenta actual
-#     ACCOUNT_ID actual
-#
-# No necesitamos definir ACCOUNT_ID manualmente aquí.
-
-
-# ------------------------------------------------------------
-# OBTENER CONTEXTO ACTUAL DE YNAB
-# ------------------------------------------------------------
-
-# Consultamos YNAB para saber qué Plan y qué cuenta
-# estamos utilizando actualmente.
-#
-# Esto se ejecuta al cargar la aplicación.
-try:
-
-    contexto_ynab = obtener_contexto_ynab()
-
-    # ID actual del Plan.
-    BUDGET_ID_ACTUAL = contexto_ynab["budget_id"]
-
-    # Nombre actual del Plan.
-    PLAN_NOMBRE = contexto_ynab["budget"]["name"]
-
-    # Información de la cuenta actual.
-    CUENTA = contexto_ynab["account"]
-
-    # ID actual de la cuenta.
-    ACCOUNT_ID_ACTUAL = contexto_ynab["account_id"]
-
-    # Nombre de la cuenta.
-    CUENTA_NOMBRE = CUENTA["name"]
-
-    # Indicar que YNAB está correctamente conectado.
-    YNAB_OK = True
-
-except Exception as e:
-
-    # Si ocurre algún problema al consultar YNAB,
-    # no destruimos toda la aplicación inmediatamente.
-    #
-    # Mostramos el error en pantalla para poder diagnosticarlo.
-    YNAB_OK = False
-
-    contexto_ynab = None
-    BUDGET_ID_ACTUAL = None
-    PLAN_NOMBRE = None
-    ACCOUNT_ID_ACTUAL = None
-    CUENTA_NOMBRE = None
-
-    st.error(
-        f"No fue posible obtener la configuración actual de YNAB: {e}"
-    )
-
-
-# ============================================================
-# TÍTULO DE LA APLICACIÓN
-# ============================================================
-
+st.set_page_config(page_title="Factura → YNAB", page_icon="🧾", layout="centered")
 st.title("Factura → YNAB")
+st.caption("Clasifica los productos de tus facturas y envíalos a tu presupuesto.")
 
+try:
+    contexto = obtener_contexto_ynab()
+    budget_id = contexto["budget_id"]
+    budget_name = contexto["budget"]["name"]
+    cuentas = contexto["accounts"]
+except Exception as exc:
+    st.error(f"No fue posible conectar con YNAB: {exc}")
+    st.stop()
 
-# ============================================================
-# INFORMACIÓN DEL PLAN Y LA CUENTA
-# ============================================================
+st.info(f"**Presupuesto:** {budget_name}")
+cuenta_inicial = contexto["account"]["id"] if contexto["account"] else None
+cuenta_ids = [a["id"] for a in cuentas]
+cuenta_por_id = {a["id"]: a for a in cuentas}
+if cuenta_inicial not in cuenta_ids:
+    cuenta_inicial = cuenta_ids[0] if len(cuentas) == 1 else None
 
-# >>> CORRECCIÓN
-#
-# Mostramos en el frontend exactamente dónde está
-# trabajando la aplicación.
-#
-# Usamos "Plan" porque ese es el término que utiliza
-# actualmente la interfaz de YNAB.
-if YNAB_OK:
-
-    st.info(
-        f"**Plan:** {PLAN_NOMBRE} | "
-        f"**Cuenta:** {CUENTA_NOMBRE}"
-    )
-
-
-# ============================================================
-# BUSCAR FACTURAS EN GMAIL
-# ============================================================
-
-dias = st.number_input(
-    "Buscar facturas de los últimos días",
-    min_value=1,
-    max_value=365,
-    value=10
+selected_id = st.selectbox(
+    "Cuenta donde registrar los gastos",
+    options=cuenta_ids,
+    index=cuenta_ids.index(cuenta_inicial) if cuenta_inicial in cuenta_ids else None,
+    format_func=lambda account_id: (
+        f"{cuenta_por_id[account_id]['name']} · "
+        f"{cuenta_por_id[account_id].get('type', 'Cuenta')}"
+    ),
+    placeholder="Selecciona una cuenta de YNAB",
+    key="ynab_account_id",
 )
+if selected_id:
+    st.caption(f"Cuenta seleccionada: **{cuenta_por_id[selected_id]['name']}**")
 
+st.subheader("Buscar facturas")
+dias = st.number_input("Buscar facturas de los últimos días",
+                       min_value=1, max_value=365, value=10, step=1)
+if st.button("📬 Buscar facturas en Gmail", use_container_width=True):
+    try:
+        with st.spinner("Buscando adjuntos en Gmail…"):
+            service = conectar_gmail()
+            st.session_state["gmail_archivos"] = obtener_adjuntos(service, int(dias))
+        st.success(f"Se encontraron {len(st.session_state['gmail_archivos'])} adjuntos.")
+    except Exception as exc:
+        st.error(f"No se pudieron consultar los correos: {exc}")
 
-# ------------------------------------------------------------
-# BOTÓN DE BÚSQUEDA
-# ------------------------------------------------------------
+gmail_files = st.session_state.get("gmail_archivos", [])
+gmail_invoices = []
+for attachment in gmail_files:
+    xml_bytes = extraer_xml(attachment)
+    if not xml_bytes:
+        continue
+    try:
+        items, date, supplier, total = leer_factura(io.BytesIO(xml_bytes))
+        if items and date and supplier:
+            gmail_invoices.append({
+                "label": f"{supplier} · ${total:,.0f}" if total is not None
+                         else f"{supplier} · {date}",
+                "filename": attachment.get("filename", "factura.xml"),
+                "xml": xml_bytes, "items": items, "date": date,
+                "supplier": supplier, "total": total,
+            })
+    except Exception:
+        continue
 
-if st.button("📬 Buscar facturas en Gmail"):
-
-    # Conectarse a Gmail.
-    service = conectar_gmail()
-
-    # Buscar los adjuntos de los últimos días indicados.
-    archivos = obtener_adjuntos(service, dias)
-
-    # Guardar los archivos en la sesión para no perderlos
-    # cuando Streamlit vuelva a ejecutar el script.
-    st.session_state["gmail_archivos"] = archivos
-
-
-# ============================================================
-# MOSTRAR RESULTADOS DE GMAIL
-# ============================================================
-
-if "gmail_archivos" in st.session_state:
-
-    # Recuperar los archivos guardados.
-    archivos = st.session_state["gmail_archivos"]
-
-
-    # --------------------------------------------------------
-    # SI ENCONTRAMOS ARCHIVOS
-    # --------------------------------------------------------
-
-    if archivos:
-
-        # Lista de opciones que mostraremos en el selectbox.
-        opciones = []
-
-        # Diccionario:
-        #
-        # texto mostrado → archivo original
-        mapa_archivos = {}
-
-
-        # ----------------------------------------------------
-        # PROCESAR ADJUNTOS
-        # ----------------------------------------------------
-
-        for a in archivos:
-
-            # Intentar extraer el XML del adjunto.
-            xml_bytes = extraer_xml(a)
-
-
-            # Si no hay XML, ignoramos ese archivo.
-            if not xml_bytes:
-                continue
-
-
-            # Leer información de la factura.
-            items, fecha, proveedor, total_factura = leer_factura(
-                io.BytesIO(xml_bytes)
-            )
-
-
-            # Si no contiene productos, ignoramos la factura.
-            if not items:
-                continue
-
-
-            # ------------------------------------------------
-            # OBTENER TOTAL
-            # ------------------------------------------------
-
-            # Utilizar el total real de la factura si existe.
-            if total_factura:
-
-                total = total_factura
-
-            else:
-
-                # Si no existe, calcularlo sumando los productos.
-                total = sum(
-                    i["precio"]
-                    for i in items
-                )
-
-
-            # Texto que aparecerá en el selector.
-            label = (
-                f"📄 {proveedor} — "
-                f"${total:,.0f} — "
-                f"{fecha}"
-            )
-
-
-            # Añadir la factura a las opciones.
-            opciones.append(label)
-
-            # Relacionar el texto con el archivo.
-            mapa_archivos[label] = a
-
-
-        # ----------------------------------------------------
-        # MOSTRAR SELECTOR
-        # ----------------------------------------------------
-
-        if opciones:
-
-            seleccion_gmail = st.selectbox(
-                "Facturas encontradas en Gmail",
-                opciones
-            )
-
-
-            # Recuperar el archivo seleccionado.
-            archivo_dict = mapa_archivos[seleccion_gmail]
-
-
-            # Extraer nuevamente el XML.
-            xml_bytes = extraer_xml(archivo_dict)
-
-
-            if xml_bytes:
-
-                # Convertir bytes a archivo en memoria.
-                archivo = io.BytesIO(xml_bytes)
-
-            else:
-
-                archivo = None
-
-
-        else:
-
-            st.info(
-                "No se encontraron facturas válidas "
-                "en los adjuntos."
-            )
-
-            archivo = None
-
-
-    # --------------------------------------------------------
-    # NO HAY ARCHIVOS
-    # --------------------------------------------------------
-
-    else:
-
-        st.info(
-            "No se encontraron correos con adjuntos."
-        )
-
-        archivo = None
-
-
-# ------------------------------------------------------------
-# SI NO HAY RESULTADOS DE GMAIL
-# ------------------------------------------------------------
-
+source = st.radio("Origen de la factura",
+                  ["Subir XML", "Seleccionar desde Gmail"], horizontal=True)
+invoice = None
+if source == "Subir XML":
+    uploaded = st.file_uploader("Sube factura XML", type=["xml"])
+    if uploaded is not None:
+        try:
+            parsed = leer_factura(uploaded)
+            invoice = {"items": parsed[0], "date": parsed[1],
+                       "supplier": parsed[2], "total": parsed[3]}
+        except Exception as exc:
+            st.error(f"No se pudo leer el XML: {exc}")
 else:
-
-    # Permitir subir manualmente un XML.
-    archivo = st.file_uploader(
-        "Sube factura XML"
-    )
-
-
-# ============================================================
-# PROCESAR FACTURA
-# ============================================================
-
-# Solo ejecutamos el resto de la aplicación
-# cuando tenemos una factura.
-if archivo:
-
-
-    # --------------------------------------------------------
-    # LEER XML
-    # --------------------------------------------------------
-
-    # Extraer información estructurada.
-    items, fecha, proveedor, total_factura = leer_factura(
-        archivo
-    )
-
-
-    # ========================================================
-    # INFORMACIÓN GENERAL
-    # ========================================================
-
-    st.write(
-        "Fecha factura:",
-        fecha
-    )
-
-    st.write(
-        "Proveedor:",
-        proveedor
-    )
-
-
-    # ========================================================
-    # TOTAL DE LA FACTURA
-    # ========================================================
-
-    if total_factura:
-
-        total = total_factura
-
+    if gmail_invoices:
+        labels = [f"{x['label']} · {x['date']} · {x['filename']}" for x in gmail_invoices]
+        selected_index = st.selectbox(
+            "Facturas encontradas en Gmail", range(len(gmail_invoices)),
+            format_func=lambda i: labels[i],
+        )
+        invoice = gmail_invoices[selected_index]
     else:
+        st.info("No hay facturas XML válidas en los resultados de Gmail. Ejecuta una búsqueda.")
 
-        total = sum(
-            i["precio"]
-            for i in items
-        )
+if invoice and not invoice.get("items"):
+    st.error("El XML se pudo abrir, pero no contiene líneas de productos válidas.")
 
+if invoice and invoice.get("items"):
+    items = invoice["items"]
+    fecha = invoice["date"]
+    proveedor = invoice["supplier"]
+    total = invoice["total"]
+    if total is None:
+        total = sum(float(item.get("precio", 0)) for item in items)
 
-    st.metric(
-        "Total factura",
-        f"${total:,.0f}"
+    st.divider()
+    st.subheader("Resumen de factura")
+    col1, col2 = st.columns(2)
+    col1.write(f"**Proveedor**\n{proveedor}")
+    col2.write(f"**Fecha**\n{fecha}")
+    st.metric("Total factura", f"${total:,.0f}")
+
+    if not selected_id:
+        st.warning("Selecciona una cuenta activa de YNAB antes de continuar.")
+        st.stop()
+
+    try:
+        categorias = traer_categorias(budget_id)
+    except Exception as exc:
+        st.error(f"No se pudieron cargar las categorías de YNAB: {exc}")
+        st.stop()
+    if not categorias:
+        st.error("El presupuesto no tiene categorías activas disponibles.")
+        st.stop()
+
+    category_names = [c["nombre"] for c in categorias]
+    category_ids = {c["nombre"]: c["id"] for c in categorias}
+    selections = []
+    st.subheader("Productos detectados")
+
+    for index, item in enumerate(items):
+        product = str(item.get("producto") or "Producto sin descripción").strip()
+        price = float(item.get("precio") or 0)
+        try:
+            memory = productos.find_one({"producto": product})
+        except Exception:
+            memory = None
+            st.warning("No se pudo consultar la memoria de categorías en MongoDB.")
+        remembered = memory.get("categoria") if memory else None
+        default_index = category_names.index(remembered) if remembered in category_names else 0
+
+        left, right = st.columns([5, 2])
+        with left:
+            st.markdown(f"**{product}**")
+            category = st.selectbox("Categoría", category_names, index=default_index,
+                                    key=f"category_{index}_{product}")
+        with right:
+            st.markdown(f"**${price:,.0f}**")
+        selections.append({"producto": product, "precio": price,
+                           "categoria": category, "category_id": category_ids[category]})
+
+    st.divider()
+    st.warning(
+        f"Se crearán {len(selections)} transacciones en "
+        f"**{budget_name} → {cuenta_por_id[selected_id]['name']}**. "
+        "Revisa la factura y las categorías antes de enviar."
     )
 
-
-    # ========================================================
-    # TRAER CATEGORÍAS DESDE YNAB
-    # ========================================================
-
-    # Obtener categorías del Plan actual.
-    categorias = traer_categorias()
-
-
-    # Crear mapa:
-    #
-    # nombre categoría → ID categoría
-    mapa_cat = {
-        c["nombre"]: c["id"]
-        for c in categorias
-    }
-
-
-    # Obtener solamente los nombres.
-    nombres_cat = list(
-        mapa_cat.keys()
-    )
-
-
-    # ========================================================
-    # TÍTULO DE ITEMS
-    # ========================================================
-
-    st.subheader(
-        "Items detectados"
-    )
-
-
-    # Lista donde guardaremos las selecciones.
-    seleccion = []
-
-
-    # ========================================================
-    # RECORRER PRODUCTOS
-    # ========================================================
-
-    for idx, i in enumerate(items):
-
-        # Nombre del producto.
-        producto = i["producto"]
-
-        # Precio del producto.
-        precio = i["precio"]
-
-
-        # ----------------------------------------------------
-        # BUSCAR MEMORIA EN MONGO
-        # ----------------------------------------------------
-
-        memoria = productos.find_one({
-            "producto": producto
-        })
-
-
-        if memoria:
-
-            # Si Mongo recuerda la categoría,
-            # utilizarla como valor predeterminado.
-            categoria_default = memoria["categoria"]
-
-        else:
-
-            # Si nunca hemos visto el producto,
-            # utilizar la primera categoría disponible.
-            categoria_default = nombres_cat[0]
-
-
-        # ----------------------------------------------------
-        # BLOQUE VISUAL
-        # ----------------------------------------------------
-
-        with st.container():
-
-            col1, col2 = st.columns(
-                [5, 1]
-            )
-
-
-            # ------------------------------------------------
-            # COLUMNA IZQUIERDA
-            # ------------------------------------------------
-
-            with col1:
-
-                # Mostrar producto.
-                st.markdown(
-                    f"**{producto}**"
-                )
-
-
-                # Selector de categoría.
-                categoria = st.selectbox(
-                    "Categoría",
-                    nombres_cat,
-                    index=(
-                        nombres_cat.index(
-                            categoria_default
-                        )
-                        if categoria_default in nombres_cat
-                        else 0
-                    ),
-                    key=f"{producto}_{idx}"
-                )
-
-
-            # ------------------------------------------------
-            # COLUMNA DERECHA
-            # ------------------------------------------------
-
-            with col2:
-
-                # Mostrar precio.
-                st.markdown(
-                    f"### ${precio:,.0f}"
-                )
-
-
-        # Separador visual.
-        st.divider()
-
-
-        # ----------------------------------------------------
-        # GUARDAR SELECCIÓN
-        # ----------------------------------------------------
-
-        seleccion.append({
-
-            # Nombre del producto.
-            "producto": producto,
-
-            # Precio.
-            "precio": precio,
-
-            # Nombre de la categoría.
-            "categoria": categoria,
-
-            # ID de la categoría.
-            "categoria_id": mapa_cat[categoria]
-        })
-
-
-    # ========================================================
-    # BOTÓN PARA ENVIAR A YNAB
-    # ========================================================
-
-    if st.button(
-        "🚀 Enviar factura a YNAB",
-        use_container_width=True
-    ):
-
-
-        # ----------------------------------------------------
-        # COMPROBAR YNAB
-        # ----------------------------------------------------
-
-        # >>> CORRECCIÓN
-        #
-        # Antes utilizábamos directamente:
-        #
-        #     ACCOUNT_ID
-        #
-        # proveniente de Secrets.
-        #
-        # Ahora utilizamos el ACCOUNT_ID que acabamos
-        # de obtener desde YNAB.
-        #
-        # Esto garantiza que la cuenta pertenece al
-        # Plan que acabamos de detectar.
-
-        if not YNAB_OK:
-
-            st.error(
-                "No se puede enviar la factura porque "
-                "no fue posible determinar el Plan "
-                "y la cuenta actuales de YNAB."
-            )
-
+    if st.button("🚀 Enviar factura a YNAB", type="primary", use_container_width=True):
+        if not fecha:
+            st.error("La factura no contiene una fecha válida; no se enviará.")
             st.stop()
+        if not proveedor:
+            st.error("No se pudo identificar el proveedor; no se enviará.")
+            st.stop()
+        rows = [{
+            "category_id": item["category_id"], "proveedor": proveedor,
+            "precio": item["precio"], "fecha": fecha, "producto": item["producto"],
+        } for item in selections]
+        try:
+            with st.spinner("Registrando la factura en YNAB…"):
+                created = crear_transacciones(budget_id, selected_id, rows)
 
+            memory_errors = 0
+            for item in selections:
+                try:
+                    productos.update_one(
+                        {"producto": item["producto"]},
+                        {"$set": {"categoria": item["categoria"],
+                                  "categoria_id": item["category_id"]}},
+                        upsert=True,
+                    )
+                except Exception:
+                    memory_errors += 1
 
-        # ----------------------------------------------------
-        # RECALCULAR CONTEXTO ANTES DE ESCRIBIR
-        # ----------------------------------------------------
-
-        # >>> CORRECCIÓN DE SEGURIDAD
-        #
-        # Volvemos a consultar YNAB justo antes de crear
-        # las transacciones.
-        #
-        # Así, si cambió el Plan o la cuenta mientras
-        # la aplicación estaba abierta, no utilizamos
-        # información antigua.
-
-        contexto_ynab = obtener_contexto_ynab()
-
-        budget_id_actual = contexto_ynab["budget_id"]
-
-        account_id_actual = contexto_ynab["account_id"]
-
-        plan_nombre_actual = contexto_ynab["budget"]["name"]
-
-        cuenta_nombre_actual = contexto_ynab["account"]["name"]
-
-
-        # ----------------------------------------------------
-        # CONFIRMACIÓN VISUAL
-        # ----------------------------------------------------
-
-        st.info(
-            f"**Plan:** {plan_nombre_actual} | "
-            f"**Cuenta:** {cuenta_nombre_actual}"
-        )
-
-
-        # ----------------------------------------------------
-        # CREAR TRANSACCIONES
-        # ----------------------------------------------------
-
-        for s in seleccion:
-
-            crear_transaccion(
-
-                # >>> CORRECCIÓN
-                #
-                # Utilizamos el ACCOUNT_ID recién obtenido
-                # desde YNAB.
-                account_id_actual,
-
-                # ID de categoría.
-                s["categoria_id"],
-
-                # Proveedor.
-                proveedor,
-
-                # Precio.
-                s["precio"],
-
-                # Fecha.
-                fecha,
-
-                # Producto.
-                s["producto"]
-            )
-
-
-            # ------------------------------------------------
-            # ACTUALIZAR MEMORIA MONGO
-            # ------------------------------------------------
-
-            productos.update_one(
-
-                # Buscar por producto.
-                {
-                    "producto": s["producto"]
-                },
-
-                # Actualizar categoría.
-                {
-                    "$set": {
-                        "categoria": s["categoria"],
-                        "categoria_id": s["categoria_id"]
-                    }
-                },
-
-                # Crear documento si no existe.
-                upsert=True
-            )
-
-
-        # ----------------------------------------------------
-        # CONFIRMACIÓN FINAL
-        # ----------------------------------------------------
-
-        st.success(
-            "Factura enviada a YNAB"
-        )
+            st.success(f"Factura registrada: {len(created)} transacciones creadas en YNAB.")
+            if memory_errors:
+                st.warning(
+                    f"YNAB recibió la factura, pero no se pudieron actualizar "
+                    f"{memory_errors} recuerdos de categorías en MongoDB."
+                )
+        except Exception as exc:
+            st.error(f"YNAB no confirmó el registro de la factura: {exc}")
+            st.caption("No se actualizó la memoria de categorías. Revisa YNAB antes de reintentar para evitar duplicados.")

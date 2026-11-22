@@ -1,144 +1,108 @@
-# gmail_fetch.py
-
-# ---------------------------------------
-# IMPORTS
-# ---------------------------------------
+"""Lectura de adjuntos XML/ZIP desde Gmail (solo lectura)."""
+import base64
+import io
+import zipfile
 
 import streamlit as st
-from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
-import base64
-import zipfile
-import io
-
-# ---------------------------------------
-# PERMISOS GMAIL
-# ---------------------------------------
+from googleapiclient.discovery import build
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
-# ---------------------------------------
-# CONECTAR CON GMAIL (USANDO SECRETS)
-# ---------------------------------------
 
 def conectar_gmail():
-
-    creds = Credentials(
+    credentials = Credentials(
         None,
         refresh_token=st.secrets["GOOGLE_REFRESH_TOKEN"],
         token_uri="https://oauth2.googleapis.com/token",
         client_id=st.secrets["GOOGLE_CLIENT_ID"],
         client_secret=st.secrets["GOOGLE_CLIENT_SECRET"],
-        scopes=SCOPES
+        scopes=SCOPES,
     )
-
-    service = build("gmail", "v1", credentials=creds)
-
-    return service
+    return build("gmail", "v1", credentials=credentials, cache_discovery=False)
 
 
-# ---------------------------------------
-# FUNCIÓN RECURSIVA PARA BUSCAR ADJUNTOS
-# ---------------------------------------
+def _decodificar_adjunto(data):
+    if not data:
+        return b""
+    data += "=" * (-len(data) % 4)
+    return base64.urlsafe_b64decode(data.encode("ascii"))
+
 
 def _recorrer_partes(parts, msg_id, service, archivos):
+    for part in parts or []:
+        original_name = part.get("filename", "")
+        filename = original_name.strip()
+        body = part.get("body", {}) or {}
 
-    for part in parts:
+        if filename and filename.casefold().endswith((".xml", ".zip")):
+            data = body.get("data")
+            if data is None:
+                attachment_id = body.get("attachmentId")
+                if attachment_id:
+                    attachment = (
+                        service.users().messages().attachments()
+                        .get(userId="me", messageId=msg_id, id=attachment_id)
+                        .execute()
+                    )
+                    data = attachment.get("data")
 
-        filename = part.get("filename")
-
-        if filename:
-
-            filename = filename.lower()
-
-            if filename.endswith(".xml") or filename.endswith(".zip"):
-
-                body = part.get("body", {})
-
-                if "data" in body:
-
-                    data = body["data"]
-
-                else:
-
-                    att_id = body.get("attachmentId")
-
-                    if not att_id:
-                        continue
-
-                    att = service.users().messages().attachments().get(
-                        userId="me",
-                        messageId=msg_id,
-                        id=att_id
-                    ).execute()
-
-                    data = att["data"]
-
-                file_bytes = base64.urlsafe_b64decode(data)
-
+            if data:
                 archivos.append({
                     "filename": filename,
-                    "data": file_bytes
+                    "data": _decodificar_adjunto(data),
+                    "message_id": msg_id,
                 })
 
-        # Buscar dentro de partes internas (correos reenviados)
-        if "parts" in part:
-            _recorrer_partes(part["parts"], msg_id, service, archivos)
+        nested = part.get("parts")
+        if nested:
+            _recorrer_partes(nested, msg_id, service, archivos)
 
-
-# ---------------------------------------
-# BUSCAR CORREOS CON FACTURAS
-# ---------------------------------------
 
 def obtener_adjuntos(service, dias):
-
-    results = service.users().messages().list(
-        userId="me",
-        q=f"has:attachment newer_than:{dias}d"
-    ).execute()
-
-    mensajes = results.get("messages", [])
-
+    """Recorre todas las páginas de Gmail y descarga adjuntos XML/ZIP."""
     archivos = []
+    page_token = None
 
-    for m in mensajes:
-
-        msg = service.users().messages().get(
+    while True:
+        response = service.users().messages().list(
             userId="me",
-            id=m["id"]
+            q=f"has:attachment newer_than:{int(dias)}d",
+            maxResults=100,
+            pageToken=page_token,
         ).execute()
 
-        payload = msg.get("payload", {})
-        parts = payload.get("parts", [])
+        for message in response.get("messages", []):
+            detail = service.users().messages().get(
+                userId="me", id=message["id"], format="full"
+            ).execute()
+            payload = detail.get("payload", {})
+            parts = payload.get("parts") or [payload]
+            _recorrer_partes(parts, message["id"], service, archivos)
 
-        _recorrer_partes(parts, m["id"], service, archivos)
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
 
     return archivos
 
 
-# ---------------------------------------
-# EXTRAER XML SI EL ARCHIVO ES ZIP
-# ---------------------------------------
-
 def extraer_xml(archivo):
-
-    filename = archivo["filename"]
-    data = archivo["data"]
+    filename = archivo.get("filename", "").casefold()
+    data = archivo.get("data", b"")
 
     if filename.endswith(".xml"):
         return data
 
     if filename.endswith(".zip"):
-
         try:
-            with zipfile.ZipFile(io.BytesIO(data)) as z:
-
-                for name in z.namelist():
-
-                    if name.lower().endswith(".xml"):
-                        return z.read(name)
-
-        except zipfile.BadZipFile:
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                xml_names = sorted(
+                    name for name in archive.namelist()
+                    if name.casefold().endswith(".xml") and not name.endswith("/")
+                )
+                return archive.read(xml_names[0]) if xml_names else None
+        except (zipfile.BadZipFile, OSError, KeyError):
             return None
 
     return None
