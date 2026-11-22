@@ -129,15 +129,26 @@ st.markdown(
         border-color: #dce5df;
     }
 
-    .stButton > button[kind="primary"] {
-        background: var(--green);
+    /*
+     * El texto de algunos botones de Streamlit vive dentro de un <p>.
+     * Como la regla global de párrafos define el color de texto, también
+     * fijamos el blanco en los descendientes del botón primario para evitar
+     * que esa regla global lo vuelva oscuro sobre el fondo verde.
+     */
+    .stButton > button[kind="primary"],
+    .stButton > button[kind="primary"] * {
+        background-color: var(--green);
         border-color: var(--green);
-        color: white;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff;
     }
 
-    .stButton > button[kind="primary"]:hover {
-        background: var(--green-dark);
+    .stButton > button[kind="primary"]:hover,
+    .stButton > button[kind="primary"]:hover * {
+        background-color: var(--green-dark);
         border-color: var(--green-dark);
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff;
     }
 
     [data-baseweb="select"] > div,
