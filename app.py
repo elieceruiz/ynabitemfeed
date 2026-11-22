@@ -207,17 +207,41 @@ st.markdown(
     }
 
     /*
-     * 6. AJUSTES PARA TELÉFONOS
-     * IMPORTANTE: al ocultar stHeader también desaparece el espacio que
-     * Streamlit normalmente reserva arriba. En móviles, la barra de estado
-     * del sistema puede superponerse al inicio de la página.
+     * 6. PROTECCIÓN DE LA BARRA DE ESTADO EN MÓVILES
      *
-     * Por eso se reserva un margen superior de 4.25rem (68px): el contenido
-     * comienza debajo de la hora, señal, Wi-Fi y demás indicadores del móvil.
-     * Este ajuste solo afecta pantallas de hasta 640px; escritorio conserva
-     * su espaciado original.
+     * El padding superior del contenedor solo separa el contenido al cargar
+     * la página. No basta cuando el usuario desplaza el documento: el título
+     * y otros elementos pueden pasar por detrás de los indicadores de Android.
+     *
+     * Para evitarlo, se crea una franja fija, opaca y no interactiva en la
+     * parte superior del viewport. La franja permanece en su sitio durante
+     * el scroll y tapa únicamente el área reservada a la barra del sistema.
+     *
+     * La variable CSS safe-area-inset-top aprovecha el área segura cuando el
+     * navegador la expone. El mínimo de 56px sirve como respaldo para
+     * navegadores Android que devuelven 0px o no implementan esa variable.
+     *
+     * El z-index mantiene la franja por encima del contenido de la app;
+     * pointer-events:none permite que los toques sigan llegando a la página.
      */
     @media (max-width: 640px) {
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: max(56px, calc(env(safe-area-inset-top, 0px) + 32px));
+            background: #fbfcfb;
+            z-index: 999999;
+            pointer-events: none;
+        }
+
+        /*
+         * Este espacio coloca el primer rótulo por debajo de la franja fija
+         * cuando la página se abre. La franja, por separado, protege la zona
+         * durante todo el desplazamiento.
+         */
         .block-container {
             padding: 4.25rem 1rem 3rem;
         }
