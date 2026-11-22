@@ -11,7 +11,7 @@ import streamlit as st
 
 BASE_URL = "https://api.ynab.com/v1"
 NOMBRE_FRESH_START = "fresh start"
-ACCOUNT_NAME = str(st.secrets.get("ACCOUNT_NAME", "") or "").strip()
+ACCOUNT_NAME = ""  # Optional; loaded lazily so unit tests need no Streamlit Secrets.
 
 
 def ynab_headers():
@@ -70,10 +70,17 @@ def resolver_cuenta(cuentas, account_id=None):
             )
         return selected
 
-    if ACCOUNT_NAME:
+    configured_name = ACCOUNT_NAME
+    if not configured_name:
+        try:
+            configured_name = str(st.secrets.get("ACCOUNT_NAME", "") or "").strip()
+        except Exception:
+            configured_name = ""
+
+    if configured_name:
         selected = next(
             (a for a in cuentas
-             if a.get("name", "").strip().casefold() == ACCOUNT_NAME.casefold()),
+             if a.get("name", "").strip().casefold() == configured_name.casefold()),
             None,
         )
         if selected:
