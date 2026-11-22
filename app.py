@@ -20,6 +20,18 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /* Misma limpieza visual ya validada en Faro 80 / Slave. */
+    [data-testid="stSidebar"],
+    [data-testid="collapsedControl"],
+    [data-testid="stHeader"],
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    [data-testid="stAppDeployButton"],
+    #MainMenu,
+    footer {
+        display: none !important;
+    }
+
     :root { --ink:#17231f; --muted:#748079; --line:#e7ece8; --soft:#f5f8f5; --green:#176b4b; --green-dark:#11543b; }
     .stApp { background:#fbfcfb; }
     [data-testid="stHeader"] { background:rgba(251,252,251,.92); }
