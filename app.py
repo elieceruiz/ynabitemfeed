@@ -1,4 +1,5 @@
 """Factura → YNAB: interfaz minimalista para importar y clasificar facturas."""
+import html
 import io
 
 import streamlit as st
@@ -81,7 +82,7 @@ if cuenta_inicial not in cuenta_ids:
 
 with st.container(border=True):
     st.markdown('<div class="budget-label">Presupuesto conectado</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="budget-name">{budget_name}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="budget-name">{html.escape(str(budget_name))}</div>', unsafe_allow_html=True)
     st.caption("Conexión activa con YNAB")
 
 st.markdown('<div class="step-label">01 · Cuenta de destino</div>', unsafe_allow_html=True)
@@ -230,7 +231,7 @@ if invoice and invoice.get("items"):
         with st.container(border=True):
             row_left, row_right = st.columns([4,1.35], vertical_alignment="center")
             with row_left:
-                st.markdown(f'<div class="product-name">{product}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="product-name">{html.escape(product)}</div>', unsafe_allow_html=True)
             with row_right:
                 st.markdown(f'<div class="product-price">${price:,.0f}</div>', unsafe_allow_html=True)
             category = st.selectbox(
