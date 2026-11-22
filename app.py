@@ -23,7 +23,7 @@ except ImportError:
 
         while True:
             coincidencia = re.match(
-                r"^(?P<prefijo>.*?)(?:\\s*[-–—]\\s*)(?P<repeticion>[^-–—]+)$",
+                r"^(?P<prefijo>.*?)(?:\s*[-–—]\s*)(?P<repeticion>[^-–—]+)$",
                 texto,
                 flags=re.DOTALL,
             )
