@@ -6,7 +6,7 @@ import streamlit as st
 
 from db import productos
 from gmail_fetch import conectar_gmail, obtener_adjuntos, extraer_xml
-from parser_xml import leer_factura
+from parser_xml import leer_factura, limpiar_descripcion_producto
 from ynab_api import obtener_contexto_ynab, traer_categorias, crear_transacciones
 
 
@@ -414,6 +414,13 @@ if invoice and not invoice.get("items"):
 # Se revisan los datos de cabecera, se clasifican productos y se confirma el envío.
 if invoice and invoice.get("items"):
     items = invoice["items"]
+
+    # Segunda barrera de normalización: los nombres se limpian justo antes
+    # de mostrarlos, consultar la memoria de categorías y preparar el memo
+    # de YNAB. Así también se corrigen facturas ya cargadas en el flujo de UI.
+    for item in items:
+        item["producto"] = limpiar_descripcion_producto(item.get("producto"))
+
     fecha = invoice["date"]
     proveedor = invoice["supplier"]
     total = invoice["total"]
