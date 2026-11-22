@@ -94,7 +94,10 @@ else:
     else:
         st.info("No hay facturas XML válidas en los resultados de Gmail. Ejecuta una búsqueda.")
 
-if invoice:
+if invoice and not invoice.get("items"):
+    st.error("El XML se pudo abrir, pero no contiene líneas de productos válidas.")
+
+if invoice and invoice.get("items"):
     items = invoice["items"]
     fecha = invoice["date"]
     proveedor = invoice["supplier"]
