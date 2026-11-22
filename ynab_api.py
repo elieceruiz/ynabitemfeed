@@ -1,8 +1,9 @@
 """Cliente de la API de YNAB para Factura → YNAB.
 
 La cuenta ya no se fija en el código: se resuelve por ID elegido en la
-interfaz, por ACCOUNT_NAME (compatibilidad) o automáticamente si solo hay
-una cuenta activa. Si hay varias, exige selección explícita.
+interfaz, por ACCOUNT_NAME (compatibilidad), por la preferencia Nu · savings
+o automáticamente si solo hay una cuenta activa. Si no hay coincidencia,
+exige selección explícita.
 """
 from decimal import Decimal, InvalidOperation
 
@@ -87,6 +88,19 @@ def resolver_cuenta(cuentas, account_id=None):
             return selected
         # El nombre antiguo (por ejemplo, Pockets) ya no existe:
         # no bloqueamos la app; dejamos que el usuario elija otra cuenta.
+
+    # Preferencia inicial: Nu · savings. Se busca por identidad y tipo,
+    # nunca por posición, para conservar intacto el orden que devuelve YNAB.
+    cuenta_preferida = next(
+        (
+            account for account in cuentas
+            if account.get("name", "").strip().casefold() == "nu"
+            and account.get("type", "").strip().casefold() == "savings"
+        ),
+        None,
+    )
+    if cuenta_preferida:
+        return cuenta_preferida
 
     if len(cuentas) == 1:
         return cuentas[0]
