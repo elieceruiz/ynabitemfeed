@@ -129,15 +129,26 @@ st.markdown(
         border-color: #dce5df;
     }
 
-    .stButton > button[kind="primary"] {
-        background: var(--green);
+    /*
+     * El texto de algunos botones de Streamlit vive dentro de un <p>.
+     * Como la regla global de párrafos define el color de texto, también
+     * fijamos el blanco en los descendientes del botón primario para evitar
+     * que esa regla global lo vuelva oscuro sobre el fondo verde.
+     */
+    .stButton > button[kind="primary"],
+    .stButton > button[kind="primary"] * {
+        background-color: var(--green);
         border-color: var(--green);
-        color: white;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff;
     }
 
-    .stButton > button[kind="primary"]:hover {
-        background: var(--green-dark);
+    .stButton > button[kind="primary"]:hover,
+    .stButton > button[kind="primary"]:hover * {
+        background-color: var(--green-dark);
         border-color: var(--green-dark);
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff;
     }
 
     [data-baseweb="select"] > div,
@@ -464,9 +475,23 @@ if invoice and invoice.get("items"):
         })
 
     st.markdown('<div class="step-label">Confirmación</div>', unsafe_allow_html=True)
+
+    # Ajusta el verbo y el sustantivo según la cantidad real de transacciones.
+    # El caso cero se expresa de forma explícita para no mostrar una promesa
+    # de creación cuando todavía no hay productos seleccionados.
+    cantidad_transacciones = len(selections)
+    if cantidad_transacciones == 0:
+        mensaje_confirmacion = "No se crearán transacciones en"
+    elif cantidad_transacciones == 1:
+        mensaje_confirmacion = "Se creará **1 transacción** en"
+    else:
+        mensaje_confirmacion = (
+            f"Se crearán **{cantidad_transacciones} transacciones** en"
+        )
+
     with st.container(border=True):
         st.write(
-            f"Se crearán **{len(selections)} transacciones** en "
+            f"{mensaje_confirmacion} "
             f"**{budget_name} → {cuenta_por_id[selected_id]['name']}**."
         )
         st.caption("Comprueba los productos, importes y categorías antes de enviar.")
