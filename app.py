@@ -6,7 +6,44 @@ import streamlit as st
 
 from db import productos
 from gmail_fetch import conectar_gmail, obtener_adjuntos, extraer_xml
-from parser_xml import leer_factura, limpiar_descripcion_producto
+from parser_xml import leer_factura
+
+# La app puede arrancar aunque Streamlit Cloud conserve temporalmente una
+# copia anterior de parser_xml.py durante la sincronización del despliegue.
+# La limpieza principal sigue en el parser; este fallback evita que una
+# función auxiliar nueva impida cargar toda la interfaz.
+try:
+    from parser_xml import limpiar_descripcion_producto
+except ImportError:
+    import re
+
+    def limpiar_descripcion_producto(descripcion):
+        """Quita únicamente una frase final repetida, sin alterar el resto."""
+        texto = str(descripcion or "").strip()
+
+        while True:
+            coincidencia = re.match(
+                r"^(?P<prefijo>.*?)(?:\\s*[-–—]\\s*)(?P<repeticion>[^-–—]+)$",
+                texto,
+                flags=re.DOTALL,
+            )
+            if not coincidencia:
+                break
+
+            prefijo = coincidencia.group("prefijo").rstrip()
+            repeticion = coincidencia.group("repeticion").strip()
+
+            normalizado = " ".join(prefijo.split()).casefold()
+            repetido = " ".join(repeticion.split()).casefold()
+
+            if repetido and normalizado.endswith(repetido):
+                texto = prefijo
+            else:
+                break
+
+        return texto
+
+
 from ynab_api import obtener_contexto_ynab, traer_categorias, crear_transacciones
 
 
