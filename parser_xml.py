@@ -1,6 +1,49 @@
 # parser_xml.py
 
+import re
 import xml.etree.ElementTree as ET
+
+
+def limpiar_descripcion_producto(descripcion):
+    """
+    Elimina una repetición literal consecutiva al final de una descripción.
+
+    Algunos emisores DIAN repiten la descripción comercial después de un
+    guion, por ejemplo:
+    "Póliza 123 OFERTAS DE PROTECCIÓN - OFERTAS DE PROTECCIÓN".
+
+    Se conserva el texto completo de la primera aparición (incluidos números
+    de póliza y referencias) y solo se elimina el último segmento cuando
+    coincide con el final del segmento anterior. La comparación ignora
+    mayúsculas y espacios repetidos, pero no altera el texto conservado.
+    """
+    texto = str(descripcion or "").strip()
+
+    while True:
+        coincidencia = re.match(
+            r"^(?P<prefijo>.*?)(?:\s*[-–—]\s*)(?P<repeticion>[^-–—]+)$",
+            texto,
+            flags=re.DOTALL,
+        )
+        if not coincidencia:
+            break
+
+        prefijo = coincidencia.group("prefijo").rstrip()
+        repeticion = coincidencia.group("repeticion").strip()
+
+        prefijo_normalizado = " ".join(prefijo.split()).casefold()
+        repeticion_normalizada = " ".join(repeticion.split()).casefold()
+
+        # Solo quitar el último segmento si ya aparece al final del prefijo.
+        # Si no coincide exactamente, se conserva la descripción original.
+        if repeticion_normalizada and prefijo_normalizado.endswith(
+            repeticion_normalizada
+        ):
+            texto = prefijo
+        else:
+            break
+
+    return texto
 
 
 def leer_factura(xml_file):
@@ -73,7 +116,7 @@ def leer_factura(xml_file):
         nombre_producto = "UNKNOWN"
 
         if producto is not None and producto.text:
-            nombre_producto = producto.text.strip()
+            nombre_producto = limpiar_descripcion_producto(producto.text)
 
         try:
             cantidad_valor = float(cantidad.text)

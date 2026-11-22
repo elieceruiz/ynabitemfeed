@@ -90,5 +90,46 @@ class TransactionBatchTests(unittest.TestCase):
         post.assert_not_called()
 
 
+class ProductDescriptionCleaningTests(unittest.TestCase):
+    def test_removes_repeated_trailing_phrase_and_keeps_policy_number(self):
+        from parser_xml import limpiar_descripcion_producto
+
+        original = (
+            "Poliza 5146000029501 OFERTAS DE PROTECCION PERSONAS"
+            " - OFERTAS DE PROTECCION PERSONAS"
+        )
+        self.assertEqual(
+            limpiar_descripcion_producto(original),
+            "Poliza 5146000029501 OFERTAS DE PROTECCION PERSONAS",
+        )
+
+    def test_removes_repeated_phrase_case_insensitively(self):
+        from parser_xml import limpiar_descripcion_producto
+
+        self.assertEqual(
+            limpiar_descripcion_producto("Servicio ABC - servicio abc"),
+            "Servicio ABC",
+        )
+
+    def test_removes_multiple_trailing_repetitions(self):
+        from parser_xml import limpiar_descripcion_producto
+
+        self.assertEqual(
+            limpiar_descripcion_producto("Producto XYZ - Producto XYZ - Producto XYZ"),
+            "Producto XYZ",
+        )
+
+    def test_keeps_distinct_description_segments(self):
+        from parser_xml import limpiar_descripcion_producto
+
+        original = "Plan básico - Protección adicional"
+        self.assertEqual(limpiar_descripcion_producto(original), original)
+
+    def test_empty_description_is_safe(self):
+        from parser_xml import limpiar_descripcion_producto
+
+        self.assertEqual(limpiar_descripcion_producto(None), "")
+
+
 if __name__ == "__main__":
     unittest.main()
