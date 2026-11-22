@@ -21,7 +21,7 @@ def limpiar_descripcion_producto(descripcion):
 
     while True:
         coincidencia = re.match(
-            r"^(?P<prefijo>.*?)(?:\\s*[-–—]\\s*)(?P<repeticion>[^-–—]+)$",
+            r"^(?P<prefijo>.*?)(?:\s*[-–—]\s*)(?P<repeticion>[^-–—]+)$",
             texto,
             flags=re.DOTALL,
         )
