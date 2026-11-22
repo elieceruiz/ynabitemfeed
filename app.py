@@ -430,7 +430,16 @@ if invoice and invoice.get("items"):
         meta_right.write(invoice.get("filename","Factura XML"))
         st.divider()
         st.metric("Total de la factura", f"${total:,.0f}")
-        st.caption(f"{len(items)} productos detectados")
+        # Usa la forma gramatical correcta según la cantidad real de líneas.
+        # Este contador describe las líneas extraídas, no productos agrupados.
+        cantidad_productos = len(items)
+        if cantidad_productos == 0:
+            texto_productos = "No se detectaron productos"
+        elif cantidad_productos == 1:
+            texto_productos = "1 producto detectado"
+        else:
+            texto_productos = f"{cantidad_productos} productos detectados"
+        st.caption(texto_productos)
 
     if not selected_id:
         st.warning("Selecciona una cuenta activa de YNAB antes de continuar.")
