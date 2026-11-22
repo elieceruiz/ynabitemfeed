@@ -103,10 +103,16 @@ else:
     st.caption("Selecciona una cuenta activa para continuar.")
 
 st.markdown('<div class="step-label">02 · Añadir factura</div>', unsafe_allow_html=True)
-upload_tab, gmail_tab = st.tabs(["Subir XML", "Buscar en Gmail"])
+source = st.radio(
+    "Origen de la factura",
+    ["Subir XML", "Buscar en Gmail"],
+    horizontal=True,
+    label_visibility="collapsed",
+    key="invoice_source",
+)
 invoice = None
 
-with upload_tab:
+if source == "Subir XML":
     uploaded = st.file_uploader(
         "Selecciona el archivo XML de tu factura",
         type=["xml"],
@@ -116,11 +122,13 @@ with upload_tab:
     if uploaded is not None:
         try:
             items, date, supplier, total = leer_factura(uploaded)
-            invoice = {"items":items, "date":date, "supplier":supplier, "total":total, "filename":uploaded.name}
+            invoice = {
+                "items": items, "date": date, "supplier": supplier,
+                "total": total, "filename": uploaded.name,
+            }
         except Exception as exc:
             st.error(f"No se pudo leer el XML: {exc}")
-
-with gmail_tab:
+else:
     with st.container(border=True):
         st.markdown("**Busca facturas recibidas por correo**")
         left, right = st.columns([1, 1.35], vertical_alignment="bottom")
@@ -148,14 +156,17 @@ with gmail_tab:
             if items and date and supplier:
                 gmail_invoices.append({
                     "label": f"{supplier} · ${total:,.0f}" if total is not None else f"{supplier} · {date}",
-                    "filename":attachment.get("filename","factura.xml"),
-                    "items":items, "date":date, "supplier":supplier, "total":total,
+                    "filename": attachment.get("filename", "factura.xml"),
+                    "items": items, "date": date, "supplier": supplier, "total": total,
                 })
         except Exception:
             continue
 
     if gmail_invoices:
-        labels = [f"{entry['label']} · {entry['date']} · {entry['filename']}" for entry in gmail_invoices]
+        labels = [
+            f"{entry['label']} · {entry['date']} · {entry['filename']}"
+            for entry in gmail_invoices
+        ]
         selected_index = st.selectbox(
             "Facturas encontradas", range(len(gmail_invoices)),
             format_func=lambda index: labels[index], key="gmail_invoice_choice",
