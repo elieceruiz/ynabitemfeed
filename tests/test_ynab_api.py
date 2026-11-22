@@ -130,6 +130,35 @@ class ProductDescriptionCleaningTests(unittest.TestCase):
 
         self.assertEqual(limpiar_descripcion_producto(None), "")
 
+    def test_invoice_parser_returns_cleaned_product_name(self):
+        import io
+        from parser_xml import leer_factura
+
+        xml = b"""<?xml version="1.0" encoding="UTF-8"?>
+        <Invoice>
+            <IssueDate>2026-11-12</IssueDate>
+            <InvoiceLine>
+                <InvoicedQuantity>1</InvoicedQuantity>
+                <Item>
+                    <Description>Poliza 5146000029501 OFERTAS DE PROTECCION PERSONAS - OFERTAS DE PROTECCION PERSONAS</Description>
+                </Item>
+                <LineExtensionAmount>28325</LineExtensionAmount>
+            </InvoiceLine>
+            <LegalMonetaryTotal>
+                <PayableAmount>28325</PayableAmount>
+            </LegalMonetaryTotal>
+        </Invoice>"""
+
+        items, fecha, proveedor, total = leer_factura(io.BytesIO(xml))
+        self.assertEqual(len(items), 1)
+        self.assertEqual(
+            items[0]["producto"],
+            "Poliza 5146000029501 OFERTAS DE PROTECCION PERSONAS",
+        )
+        self.assertEqual(items[0]["precio"], 28325.0)
+        self.assertEqual(items[0]["cantidad"], 1.0)
+
+
 
 if __name__ == "__main__":
     unittest.main()
