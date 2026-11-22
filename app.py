@@ -232,7 +232,13 @@ st.markdown(
             left: 0;
             right: 0;
             height: max(56px, calc(env(safe-area-inset-top, 0px) + 32px));
-            background: #fbfcfb;
+            /*
+             * Fondo verde oscuro para conservar el contraste con los
+             * indicadores blancos de Android (hora, señal y batería).
+             * No usar aquí el fondo claro de la aplicación: esta franja
+             * ocupa también el área donde el sistema dibuja esos indicadores.
+             */
+            background: #11543b;
             z-index: 999999;
             pointer-events: none;
         }
