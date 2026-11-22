@@ -35,6 +35,7 @@ selected_id = st.selectbox(
         f"{cuenta_por_id[account_id].get('type', 'Cuenta')}"
     ),
     placeholder="Selecciona una cuenta de YNAB",
+    key="ynab_account_id",
 )
 if selected_id:
     st.caption(f"Cuenta seleccionada: **{cuenta_por_id[selected_id]['name']}**")
@@ -155,6 +156,12 @@ if invoice:
     )
 
     if st.button("🚀 Enviar factura a YNAB", type="primary", use_container_width=True):
+        if not fecha:
+            st.error("La factura no contiene una fecha válida; no se enviará.")
+            st.stop()
+        if not proveedor:
+            st.error("No se pudo identificar el proveedor; no se enviará.")
+            st.stop()
         rows = [{
             "category_id": item["category_id"], "proveedor": proveedor,
             "precio": item["precio"], "fecha": fecha, "producto": item["producto"],
