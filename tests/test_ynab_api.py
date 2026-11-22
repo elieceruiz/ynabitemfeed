@@ -24,6 +24,40 @@ class AccountResolutionTests(unittest.TestCase):
             ynab_api.resolver_cuenta([self.accounts[0]])["id"], "acct-1"
         )
 
+    def test_nu_savings_is_default_without_reordering_accounts(self):
+        accounts = [
+            {"id": "acct-bank", "name": "Bancolombia", "type": "checking", "deleted": False},
+            {"id": "acct-nu", "name": "Nu", "type": "savings", "deleted": False},
+            {"id": "acct-cash", "name": "Efectivo", "type": "cash", "deleted": False},
+        ]
+
+        selected = ynab_api.resolver_cuenta(accounts)
+
+        self.assertEqual(selected["id"], "acct-nu")
+        self.assertEqual(
+            [account["id"] for account in accounts],
+            ["acct-bank", "acct-nu", "acct-cash"],
+        )
+
+    def test_nu_checking_is_not_used_as_savings_default(self):
+        accounts = [
+            {"id": "acct-nu-checking", "name": "Nu", "type": "checking", "deleted": False},
+            {"id": "acct-bank", "name": "Bancolombia", "type": "checking", "deleted": False},
+        ]
+
+        self.assertIsNone(ynab_api.resolver_cuenta(accounts))
+
+    def test_configured_account_preference_still_wins(self):
+        accounts = [
+            {"id": "acct-nu", "name": "Nu", "type": "savings", "deleted": False},
+            {"id": "acct-bank", "name": "Bancolombia", "type": "checking", "deleted": False},
+        ]
+        with patch.object(ynab_api, "ACCOUNT_NAME", "Bancolombia"):
+            selected = ynab_api.resolver_cuenta(accounts)
+
+        self.assertEqual(selected["id"], "acct-bank")
+
+
     def test_unknown_explicit_id_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "ya no está activa"):
             ynab_api.resolver_cuenta(self.accounts, account_id="deleted-id")
